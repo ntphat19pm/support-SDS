@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>OCR HTML Thuần – Ổn Định</title>
+
+    <!-- Tesseract v5 -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 900px;
+            margin: auto;
+        }
+
+        img,
+        canvas {
+            max-width: 50%;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            display: block;
+        }
+
+        textarea {
+            width: 100%;
+            height: 220px;
+            margin-top: 10px;
+            font-family: Consolas, monospace;
+            white-space: pre-wrap;
+        }
+
+        .box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>OCR HTML + JS (Đọc toàn bộ văn bản trong ảnh)</h2>
+
+    <input type="file" id="file" accept="image/*,.pdf">
+
+    <div class="box">
+        <b>Ảnh gốc</b>
+        <img id="preview">
+    </div>
+
+    <div class="box">
+        <b>Ảnh xử lý (OCR input)</b>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <p id="status">Chưa có ảnh</p>
+
+    <div class="box">
+        <b>OCR RAW</b>
+        <textarea id="result"></textarea>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById("file");
+        const preview = document.getElementById("preview");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const status = document.getElementById("status");
+        const result = document.getElementById("result");
+
+        fileInput.onchange = async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            result.value = "";
+            status.innerText = "📂 Đang xử lý file...";
+
+            if (file.type === "application/pdf") {
+                await handlePDF(file);
+            } else {
+                preview.src = URL.createObjectURL(file);
+                await preview.decode();
+                preprocess(preview);
+                await runOCR();
+            }
+        };
+
+
+        /* ================= PREPROCESS ================= */
+        function preprocess(img) {
+            const scale = 2; // RẤT QUAN TRỌNG
+            canvas.width = img.naturalWidth * scale;
+            canvas.height = img.naturalHeight * scale;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = imageData.data;
+
+            // tính ngưỡng trung bình
+            let sum = 0;
+            for (let i = 0; i < d.length; i += 4) {
+                sum += d[i];
+            }
+            let avg = sum / (d.length / 4);
+
+            // adaptive threshold
+            for (let i = 0; i < d.length; i += 4) {
+                let g = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+                let v = g > avg ? 255 : 0;
+                d[i] = d[i + 1] = d[i + 2] = v;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /* ================= OCR ================= */
+        async function runOCR() {
+            status.innerText = "🔍 OCR đang xử lý...";
+
+            try {
+                const { data } = await Tesseract.recognize(
+                    canvas,
+                    "vie+eng",
+                    {
+                        tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+                        preserve_interword_spaces: 1,
+                        logger: m => {
+                            if (m.status === "recognizing text") {
+                                status.innerText = `🔍 OCR ${Math.round(m.progress * 100)}%`;
+                            }
+                        }
+                    }
+                );
+
+                result.value = cleanText(data.text);
+                status.innerText = "✅ OCR hoàn thành";
+            } catch (err) {
+                status.innerText = "❌ OCR lỗi";
+                console.error(err);
+            }
+        }
+
+        /* ================= CLEAN TEXT ================= */
+        function cleanText(text) {
+            return text
+                // chuẩn hóa unicode
+                .normalize("NFC")
+
+                // thay ký tự OCR hay nhầm
+                .replace(/[|]/g, "I")
+                .replace(/[“”]/g, '"')
+                .replace(/[‘’]/g, "'")
+
+                // bỏ ký tự rác
+                .replace(/[_~`]/g, "")
+                .replace(/[^\S\r\n]{2,}/g, " ")
+
+                // ghép chữ bị tách: T R U O N G → TRUONG
+                .replace(/\b([A-ZÀ-Ỹ])\s+([A-ZÀ-Ỹ])\s+([A-ZÀ-Ỹ])\b/g, "$1$2$3")
+                .replace(/\b([A-ZÀ-Ỹ])\s+([A-ZÀ-Ỹ])\b/g, "$1$2")
+
+                // ghép số bị tách: 0 3 7 → 037
+                .replace(/\b(\d)\s+(\d)\s+(\d)\b/g, "$1$2$3")
+                .replace(/\b(\d)\s+(\d)\b/g, "$1$2")
+
+                // xóa dòng quá ngắn (nhiễu)
+                .split("\n")
+                .map(line => line.trim())
+                .filter(line => line.length > 2)
+                .join("\n")
+
+                // gom dòng thừa
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+        }
+
+        async function handlePDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            let fullText = "";
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                status.innerText = `📄 Đang xử lý trang ${pageNum}/${pdf.numPages}`;
+
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 2 });
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport
+                }).promise;
+
+                // OCR từng trang
+                const { data } = await Tesseract.recognize(
+                    canvas,
+                    "vie+eng",
+                    {
+                        tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+                        preserve_interword_spaces: 1
+                    }
+                );
+
+                fullText += `\n\n===== TRANG ${pageNum} =====\n`;
+                fullText += cleanText(data.text);
+            }
+
+            result.value = fullText.trim();
+            status.innerText = "✅ OCR PDF hoàn thành";
+        }
+
+
+    </script>
+
+</body>
+
+</html>
