@@ -205,6 +205,10 @@
             /* cho kéo cao thấp */
             font-family: inherit;
         }
+
+        input.error {
+            border: 1px solid red;
+        }
     </style>
 </head>
 
@@ -222,6 +226,12 @@
         </div>
 
         <hr>
+        <div id="mstError"
+            style="color:red;font-size: 15px;margin-top: -15px;margin-bottom: 14px;display:none;font-weight: bold;">
+        </div>
+        <div id="emailError" class="error-text"
+            style="color:red;font-size: 15px;margin-top: -15px;margin-bottom: 14px;display:none;font-weight: bold;">
+        </div>
 
         <div class="grid">
             <div><label>Mã số thuế</label><input id="mst"></div>
@@ -271,20 +281,33 @@
     </div>
 
     <script>
+        /* ================= GLOBAL ================= */
         let lastMST = "";
+        const mstError = document.getElementById("mstError");
         const els = document.querySelectorAll("input");
+
+        /* ================= INPUT RENDER ================= */
         els.forEach(e => e.addEventListener("input", render));
 
+        /* ================= TYPE CHANGE ================= */
         document.querySelectorAll('input[name="type"]').forEach(r =>
             r.addEventListener("change", () => {
                 labelChu.textContent = r.value === "DN"
                     ? "Người đại diện pháp luật"
                     : "Chủ hộ kinh doanh";
+
+                clearMSTError();
+
+                if (mst.value.trim()) {
+                    validateMST(); // kiểm tra lại khi đổi DN / HKD
+                }
+
                 toggleTaxCheckbox();
                 render();
             })
         );
 
+        /* ================= RESET FORM ================= */
         function resetFormByMST() {
             company.value = "";
             owner.value = "";
@@ -292,31 +315,64 @@
             email.value = "";
             address.value = "";
             note.value = "";
-
             render();
+            clearEmailError();
         }
 
+        /* ================= VALIDATE MST ================= */
+        function validateMST() {
+            const tax = mst.value.trim();
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!tax || !typeEl) return true;
 
+            const type = typeEl.value;
+
+            if (type === "DN" && tax.length !== 10) {
+                showMSTError("Doanh nghiệp phải có Mã số thuế 10 số");
+                return false;
+            }
+
+            if (type === "HKD" && tax.length !== 12) {
+                showMSTError("Hộ kinh doanh phải có Mã số thuế 12 số");
+                return false;
+            }
+
+            clearMSTError();
+            return true;
+        }
+
+        /* ================= CLEAR ERROR WHEN TYPING ================= */
+        mst.addEventListener("input", clearMSTError);
+        email.addEventListener("input", clearEmailError);
+
+        email.addEventListener("blur", () => {
+            if (email.value && !isValidEmail(email.value)) {
+                showEmailError("Vui lòng nhập đúng định dạng email");
+            } else {
+                clearEmailError();
+            }
+        });
+
+        /* ================= MST BLUR ================= */
         mst.addEventListener("blur", async () => {
             const tax = mst.value.trim();
-            if (!tax || tax.length < 10) return;
 
-            // Nếu MST thay đổi → reset dữ liệu cũ
+            clearMSTError();
+            if (!tax) return;
+
+            // ❌ Sai MST → không tra API
+            if (!validateMST()) return;
+
+            // MST thay đổi → reset form
             if (tax !== lastMST) {
                 resetFormByMST();
                 lastMST = tax;
             }
 
-            const typeEl = document.querySelector('input[name="type"]:checked');
-            if (!typeEl) return;
-
-            const type = typeEl.value;
-            if (type !== "DN" && type !== "HKD") return;
-
             try {
                 let found = false;
 
-                /* ================= 1️⃣ ƯU TIÊN VIETQR ================= */
+                /* ================= 1️⃣ VIETQR ================= */
                 const resVietQR = await fetch(
                     `https://api.vietqr.io/v2/business/${tax}`
                 );
@@ -331,11 +387,11 @@
                         if (d.address) address.value = d.address;
                         if (d.phone) phone.value = d.phone;
 
-                        found = true; // ✅ đã có dữ liệu → KHÔNG gọi API khác
+                        found = true;
                     }
                 }
 
-                /* ================= 2️⃣ FALLBACK XINVOICE ================= */
+                /* ================= 2️⃣ XINVOICE (FALLBACK) ================= */
                 if (!found) {
                     const resGDT = await fetch(
                         `https://api.xinvoice.vn/gdt-api/tax-payer/${tax}`
@@ -343,16 +399,6 @@
 
                     if (resGDT.ok) {
                         const jsonGDT = await resGDT.json();
-
-                        /*
-                          Cấu trúc thường gặp:
-                          {
-                            name,
-                            address,
-                            legalRepresentative,
-                            status
-                          }
-                        */
 
                         if (jsonGDT.name) company.value = jsonGDT.name;
                         if (jsonGDT.address) address.value = jsonGDT.address;
@@ -363,17 +409,25 @@
 
                 render();
             } catch (e) {
-                console.error("Lỗi tra cứu MST", e);
+                showMSTError("Không thể tra cứu Mã số thuế. Vui lòng thử lại");
+                console.error(e);
             }
         });
 
+        /* ================= RENDER ================= */
         function line(title) {
             return `<div class="divider">----------------------------------------</div>
-            <span class="title">${title}</span>`;
+    <span class="title">${title}</span>`;
         }
 
         function render() {
-            const type = document.querySelector('input[name="type"]:checked').value;
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!typeEl) {
+                content.innerHTML = "";
+                return;
+            }
+
+            const type = typeEl.value;
             const passEI = type === "HKD" ? mst.value : "pass!@#$%";
 
             let html = type === "DN"
@@ -421,15 +475,11 @@ MK: tct@123<br>`;
                 const money = payAmount.value
                     ? Number(payAmount.value).toLocaleString("vi-VN")
                     : "";
+
                 html += `
 ${line("THÔNG TIN THANH TOÁN")}
 
-<div style="
-    display:flex;
-    gap:16px;
-    align-items:flex-start;
-">
-    <!-- CỘT TRÁI: NỘI DUNG -->
+<div style="display:flex;gap:16px;align-items:flex-start;">
     <div style="flex:1">
         Số tài khoản: V2SD08112998<br>
         Tên tài khoản: CTY CO PHAN DAU TU CONG NGHE VA THUONG MAI SOFTDREAMS<br>
@@ -438,21 +488,19 @@ ${line("THÔNG TIN THANH TOÁN")}
         Nội dung: ${payContent.value}<br>
     </div>
 
-    <!-- CỘT PHẢI: QR -->
     ${window.qrImageBase64
                         ? `<div style="width:200px;text-align:center">
-                   <img src="${window.qrImageBase64}"
-                        style="width:140px;height:auto;margin-top: -31px">
-               </div>`
-                        : ``
-                    }
-</div>
-`;
+            <img src="${window.qrImageBase64}"
+                 style="width:140px;height:auto;margin-top:-31px">
+           </div>`
+                        : ``}
+</div>`;
             }
 
             content.innerHTML = html;
         }
 
+        /* ================= COPY ================= */
         function copyAll() {
             const text = content.innerText
                 .split("\n")
@@ -464,7 +512,7 @@ ${line("THÔNG TIN THANH TOÁN")}
             alert("Đã copy nội dung để gửi Zalo ✅");
         }
 
-        /* ===== PASTE QR IMAGE ===== */
+        /* ================= QR PASTE ================= */
         const qrPaste = document.getElementById("qrPaste");
         const qrPreview = document.getElementById("qrPreview");
 
@@ -477,18 +525,17 @@ ${line("THÔNG TIN THANH TOÁN")}
                     reader.onload = () => {
                         qrPreview.src = reader.result;
                         qrPreview.style.display = "block";
-                        window.qrImageBase64 = reader.result; // nếu cần dùng sau
+                        window.qrImageBase64 = reader.result;
                     };
                     reader.readAsDataURL(file);
                 }
             }
         });
 
-        /* ===== FIX PDF TRẮNG ===== */
+        /* ================= PDF ================= */
         async function exportPDF() {
             const { jsPDF } = window.jspdf;
 
-            /* ================= HEADER ================= */
             const header = document.createElement("div");
             header.style.textAlign = "center";
             header.style.marginBottom = "10px";
@@ -501,32 +548,22 @@ ${line("THÔNG TIN THANH TOÁN")}
 
             const title = document.createElement("div");
             title.innerHTML = `
-        <div style="font-size:18px;font-weight:700">
-            BIÊN BẢN BÀN GIAO
-        </div>
-        <div style="font-size:15px;color:#555">
-            Phần mềm & thông tin sử dụng
-        </div>
+        <div style="font-size:18px;font-weight:700">BIÊN BẢN BÀN GIAO</div>
+        <div style="font-size:15px;color:#555">Phần mềm & thông tin sử dụng</div>
     `;
 
             header.appendChild(logo);
             header.appendChild(title);
 
-            /* ================= BODY ================= */
             const bodyClone = content.cloneNode(true);
             bodyClone.style.boxShadow = "none";
             bodyClone.style.borderRadius = "0";
 
-            /* ❌ REMOVE QR khỏi body clone (nếu có) */
-            // const qrInBody = bodyClone.querySelector("img");
-            // if (qrInBody) qrInBody.remove();
-
-            /* ================= WRAPPER ================= */
             const wrapper = document.createElement("div");
             wrapper.style.position = "fixed";
             wrapper.style.left = "-10000px";
             wrapper.style.top = "0";
-            wrapper.style.width = "794px"; // A4 px
+            wrapper.style.width = "794px";
             wrapper.style.padding = "15px";
             wrapper.style.background = "#fff";
             wrapper.style.fontFamily = "system-ui, sans-serif";
@@ -535,13 +572,11 @@ ${line("THÔNG TIN THANH TOÁN")}
             wrapper.appendChild(bodyClone);
             document.body.appendChild(wrapper);
 
-            /* ================= WAIT LOGO ================= */
             await new Promise(r => {
                 logo.onload = r;
                 logo.onerror = r;
             });
 
-            /* ================= HTML → CANVAS ================= */
             const canvas = await html2canvas(wrapper, {
                 scale: 2,
                 backgroundColor: "#fff",
@@ -551,15 +586,12 @@ ${line("THÔNG TIN THANH TOÁN")}
 
             document.body.removeChild(wrapper);
 
-            /* ================= PDF ================= */
             const pdf = new jsPDF("p", "mm", "a4");
             const pageW = 210;
             const pageH = 297;
 
             const imgW = pageW;
             const imgH = (canvas.height * imgW) / canvas.width;
-
-            /* ⚠️ Scale để không vượt quá 1 trang */
             const finalH = Math.min(imgH, pageH - 20);
 
             pdf.addImage(
@@ -571,49 +603,10 @@ ${line("THÔNG TIN THANH TOÁN")}
                 finalH
             );
 
-            /* ================= QR BOTTOM RIGHT (NO SCALE BUG) ================= */
-            // if (window.qrImageBase64) {
-            //     const img = new Image();
-            //     img.src = window.qrImageBase64;
-
-            //     await new Promise(r => {
-            //         img.onload = r;
-            //         img.onerror = r;
-            //     });
-
-            //     // Kích thước gốc (px)
-            //     const pxW = img.width;
-            //     const pxH = img.height;
-
-            //     // Đổi px → mm (96dpi ≈ 25.4mm)
-            //     const mmPerPx = 25.4 / 96;
-
-            //     let qrW = pxW * mmPerPx;
-            //     let qrH = pxH * mmPerPx;
-
-            //     // Giới hạn tối đa (để không quá to)
-            //     const maxSize = 60; // mm
-            //     const scale = Math.min(maxSize / qrW, maxSize / qrH, 1);
-
-            //     qrW *= scale;
-            //     qrH *= scale;
-
-            //     const margin = 15;
-
-            //     pdf.addImage(
-            //         window.qrImageBase64,
-            //         window.qrImageBase64.includes("jpeg") ? "JPEG" : "PNG",
-            //         pageW - qrW - margin,
-            //         pageH - qrH - margin,
-            //         qrW,
-            //         qrH
-            //     );
-            // }
-
-            /* ================= SAVE ================= */
             pdf.save(`bien-ban-ban-giao-${mst.value || "khach-hang"}.pdf`);
         }
 
+        /* ================= TOGGLE TAX ================= */
         function toggleTaxCheckbox() {
             const type = document.querySelector('input[name="type"]:checked').value;
             const taxWrapper = document.getElementById("taxWrapper");
@@ -622,13 +615,48 @@ ${line("THÔNG TIN THANH TOÁN")}
                 taxWrapper.style.display = "block";
             } else {
                 taxWrapper.style.display = "none";
-                chkTax.checked = false; // reset để không render nhầm
+                chkTax.checked = false;
             }
         }
 
+        /* ================= ERROR UI ================= */
+        function showMSTError(msg) {
+            mstError.textContent = msg;
+            mstError.style.display = "block";
+            mst.classList.add("error");
+        }
+
+        function clearMSTError() {
+            mstError.textContent = "";
+            mstError.style.display = "none";
+            mst.classList.remove("error");
+        }
+
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        const emailError = document.getElementById("emailError");
+
+        function showEmailError(msg) {
+            emailError.textContent = msg;
+            emailError.style.display = "block";
+            email.classList.add("error");
+        }
+
+        function clearEmailError() {
+            emailError.textContent = "";
+            emailError.style.display = "none";
+            email.classList.remove("error");
+        }
+
+
+
+        /* ================= INIT ================= */
         toggleTaxCheckbox();
         render();
     </script>
+
 </body>
 
 </html>
