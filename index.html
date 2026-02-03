@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tạo nội dung bàn giao</title>
+
+    <!-- Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+
+    <style>
+        :root {
+            --brand-primary: #0d6efd;
+            --brand-hkd: #22c55e;
+            --brand-easybook: #897a19;
+            --brand-easypos: #511989;
+            --brand-tax: #891919;
+            --border: #ddd;
+            --danger: #dc2626;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+        }
+
+        h2,
+        h3 {
+            margin-top: 0
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 40px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        input {
+            width: 96%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        hr {
+            margin: 24px 0
+        }
+
+        .type-select {
+            display: flex;
+            gap: 14px;
+        }
+
+        .type-option {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .type-option input {
+            display: none
+        }
+
+        .type-option:has(input:checked[value="HKD"]) {
+            border-color: var(--brand-hkd);
+            background: #f0fff5;
+            color: var(--brand-hkd);
+        }
+
+        .type-option:has(input:checked[value="DN"]) {
+            border-color: var(--brand-primary);
+            background: #f0f7ff;
+            color: var(--brand-primary);
+        }
+
+        .display-options {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .display-item {
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            background: #fafafa;
+            text-align: center;
+        }
+
+        .display-item input {
+            display: none
+        }
+
+        .display-item:has(input:checked) {
+            border-color: var(--brand-primary);
+            background: #f0f7ff;
+        }
+
+        .display-item.payment:has(input:checked) {
+            border-color: var(--brand-hkd);
+            background: #f0fff5;
+        }
+
+        .display-item.easybook:has(input:checked) {
+            border-color: var(--brand-easybook);
+            background: #fffff0;
+        }
+
+        .display-item.easypos:has(input:checked) {
+            border-color: var(--brand-easypos);
+            background: #f0f7ff;
+        }
+
+        .display-item.tax:has(input:checked) {
+            border-color: var(--brand-tax);
+            background: #fff0f0;
+        }
+
+        .preview {
+            background: #f9fafb;
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .title {
+            font-weight: 700;
+            color: var(--danger);
+            display: block;
+            margin: 8px 0 4px;
+        }
+
+        .divider {
+            color: #999;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-copy {
+            background: #0d6efd;
+            color: #fff
+        }
+
+        @media(max-width:700px) {
+
+            .grid,
+            .display-options {
+                grid-template-columns: 1fr
+            }
+        }
+
+        textarea {
+            width: 96%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+            resize: vertical;
+            /* cho kéo cao thấp */
+            font-family: inherit;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>📄 Tạo nội dung bàn giao</h2>
+
+        <div class="type-select">
+            <label class="type-option">
+                <input type="radio" name="type" value="HKD" checked> Hộ kinh doanh
+            </label>
+            <label class="type-option">
+                <input type="radio" name="type" value="DN"> Doanh nghiệp
+            </label>
+        </div>
+
+        <hr>
+
+        <div class="grid">
+            <div><label>Mã số thuế</label><input id="mst"></div>
+            <div><label>Tên HKD / DN</label><input id="company"></div>
+            <div><label id="labelChu">Chủ hộ kinh doanh</label><input id="owner"></div>
+            <div><label>Số điện thoại</label><input id="phone"></div>
+            <div><label>Email</label><input id="email"></div>
+            <div><label>Địa chỉ</label><input id="address"></div>
+            <div><label>Số tiền phải trả</label><input id="payAmount" type="number"></div>
+            <div><label>Nội dung thanh toán</label><input id="payContent"></div>
+            <div>
+                <label for="note">Ghi chú</label>
+                <textarea id="note" rows="16" placeholder="Nhập ghi chú..."></textarea>
+            </div>
+            <!-- ✅ THÊM INPUT PASTE QR (CÁCH 1) -->
+            <div>
+                <label>Dán hình mã QR (Ctrl + V)</label>
+                <input id="qrPaste" placeholder="Click vào đây rồi Ctrl + V hình QR">
+                <img id="qrPreview" style="display:none;max-width:200px;margin-top:8px;border-radius:8px;">
+            </div>
+
+        </div>
+
+        <hr>
+
+        <h3>Hiển thị nội dung</h3>
+        <div class="display-options">
+            <label class="display-item"><input type="checkbox" id="chkInvoice"> EasyInvoice</label>
+            <label class="display-item easypos"><input type="checkbox" id="chkPos"> EasyPOS</label>
+            <label class="display-item easybook"><input type="checkbox" id="chkBook"> EasyBook</label>
+            <label class="display-item payment"><input type="checkbox" id="chkPay"> Thanh toán</label>
+            <label class="display-item tax" id="taxWrapper" style="display:none">
+                <input type="checkbox" id="chkTax"> Thuế điện tử
+            </label>
+        </div>
+
+        <hr>
+
+        <h3>Xem trước</h3>
+        <div class="preview">
+            <div class="card" id="content"></div>
+            <div class="actions">
+                <button class="btn-copy" onclick="copyAll()">📋 Copy Zalo format</button>
+                <button class="btn-copy" style="background:#dc2626" onclick="exportPDF()">📄 Xuất PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastMST = "";
+        const els = document.querySelectorAll("input");
+        els.forEach(e => e.addEventListener("input", render));
+
+        document.querySelectorAll('input[name="type"]').forEach(r =>
+            r.addEventListener("change", () => {
+                labelChu.textContent = r.value === "DN"
+                    ? "Người đại diện pháp luật"
+                    : "Chủ hộ kinh doanh";
+                toggleTaxCheckbox();
+                render();
+            })
+        );
+
+        function resetFormByMST() {
+            company.value = "";
+            owner.value = "";
+            phone.value = "";
+            email.value = "";
+            address.value = "";
+            note.value = "";
+
+            render();
+        }
+
+
+        mst.addEventListener("blur", async () => {
+            const tax = mst.value.trim();
+            if (!tax || tax.length < 10) return;
+
+            // Nếu MST thay đổi → reset dữ liệu cũ
+            if (tax !== lastMST) {
+                resetFormByMST();
+                lastMST = tax;
+            }
+
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!typeEl) return;
+
+            const type = typeEl.value;
+            if (type !== "DN" && type !== "HKD") return;
+
+            try {
+                let found = false;
+
+                /* ================= 1️⃣ ƯU TIÊN VIETQR ================= */
+                const resVietQR = await fetch(
+                    `https://api.vietqr.io/v2/business/${tax}`
+                );
+
+                if (resVietQR.ok) {
+                    const jsonVietQR = await resVietQR.json();
+
+                    if (jsonVietQR.code === "00" && jsonVietQR.data) {
+                        const d = jsonVietQR.data;
+
+                        if (d.name) company.value = d.name;
+                        if (d.address) address.value = d.address;
+                        if (d.phone) phone.value = d.phone;
+
+                        found = true; // ✅ đã có dữ liệu → KHÔNG gọi API khác
+                    }
+                }
+
+                /* ================= 2️⃣ FALLBACK XINVOICE ================= */
+                if (!found) {
+                    const resGDT = await fetch(
+                        `https://api.xinvoice.vn/gdt-api/tax-payer/${tax}`
+                    );
+
+                    if (resGDT.ok) {
+                        const jsonGDT = await resGDT.json();
+
+                        /*
+                          Cấu trúc thường gặp:
+                          {
+                            name,
+                            address,
+                            legalRepresentative,
+                            status
+                          }
+                        */
+
+                        if (jsonGDT.name) company.value = jsonGDT.name;
+                        if (jsonGDT.address) address.value = jsonGDT.address;
+                        if (jsonGDT.legalRepresentative)
+                            owner.value = jsonGDT.legalRepresentative;
+                    }
+                }
+
+                render();
+            } catch (e) {
+                console.error("Lỗi tra cứu MST", e);
+            }
+        });
+
+        function line(title) {
+            return `<div class="divider">----------------------------------------</div>
+            <span class="title">${title}</span>`;
+        }
+
+        function render() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const passEI = type === "HKD" ? mst.value : "pass!@#$%";
+
+            let html = type === "DN"
+                ? line("THÔNG TIN DOANH NGHIỆP")
+                : line("THÔNG TIN HỘ KINH DOANH");
+
+            html += `
+${company.value}<br>
+MST: ${mst.value}<br>
+${labelChu.textContent}: ${owner.value}<br>
+Địa chỉ: ${address.value}<br>
+SĐT: ${phone.value}<br>
+Email: ${email.value}<br>
+Ghi chú: ${note.value}<br>
+`;
+
+            if (chkInvoice.checked) {
+                html += `${line("PHẦN MỀM EASYINVOICE")}
+https://app.easyinvoice.vn<br>
+MST: ${mst.value}<br>
+TK: ${mst.value}<br>
+MK: ${passEI}<br>`;
+            }
+
+            if (chkPos.checked) {
+                html += `${line("PHẦN MỀM EASYPOS")}
+https://app.easypos.vn<br>
+TK: ${phone.value}<br>
+MK: Epos@123<br>`;
+            }
+
+            if (chkBook.checked) {
+                html += `${line("PHẦN MỀM EASYBOOK")}
+https://app88.easybooks.vn<br>
+Email nhận thông tin: ${email.value}<br>`;
+            }
+
+            if (type === "DN" && chkTax.checked) {
+                html += `${line("THUẾ ĐIỆN TỬ")}
+TK: ${mst.value}-ql<br>
+MK: tct@123<br>`;
+            }
+
+            if (chkPay.checked) {
+                const money = payAmount.value
+                    ? Number(payAmount.value).toLocaleString("vi-VN")
+                    : "";
+                html += `
+${line("THÔNG TIN THANH TOÁN")}
+
+<div style="
+    display:flex;
+    gap:16px;
+    align-items:flex-start;
+">
+    <!-- CỘT TRÁI: NỘI DUNG -->
+    <div style="flex:1">
+        Số tài khoản: V2SD08112998<br>
+        Tên tài khoản: CTY CO PHAN DAU TU CONG NGHE VA THUONG MAI SOFTDREAMS<br>
+        Ngân hàng: BIDV CN Thanh Xuân<br>
+        Số tiền phải trả: ${money}<br>
+        Nội dung: ${payContent.value}<br>
+    </div>
+
+    <!-- CỘT PHẢI: QR -->
+    ${window.qrImageBase64
+                        ? `<div style="width:200px;text-align:center">
+                   <img src="${window.qrImageBase64}"
+                        style="width:140px;height:auto;margin-top: -31px">
+               </div>`
+                        : ``
+                    }
+</div>
+`;
+            }
+
+            content.innerHTML = html;
+        }
+
+        function copyAll() {
+            const text = content.innerText
+                .split("\n")
+                .map(l => l.trimStart())
+                .join("\n")
+                .trim();
+
+            navigator.clipboard.writeText(text);
+            alert("Đã copy nội dung để gửi Zalo ✅");
+        }
+
+        /* ===== PASTE QR IMAGE ===== */
+        const qrPaste = document.getElementById("qrPaste");
+        const qrPreview = document.getElementById("qrPreview");
+
+        qrPaste.addEventListener("paste", e => {
+            const items = e.clipboardData.items;
+            for (const item of items) {
+                if (item.type.includes("image")) {
+                    const file = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        qrPreview.src = reader.result;
+                        qrPreview.style.display = "block";
+                        window.qrImageBase64 = reader.result; // nếu cần dùng sau
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        /* ===== FIX PDF TRẮNG ===== */
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+
+            /* ================= HEADER ================= */
+            const header = document.createElement("div");
+            header.style.textAlign = "center";
+            header.style.marginBottom = "10px";
+
+            const logo = new Image();
+            logo.src = "./logo-softdream-02.png";
+            logo.style.height = "60px";
+            logo.style.display = "block";
+            logo.style.margin = "0 auto 8px";
+
+            const title = document.createElement("div");
+            title.innerHTML = `
+        <div style="font-size:18px;font-weight:700">
+            BIÊN BẢN BÀN GIAO
+        </div>
+        <div style="font-size:15px;color:#555">
+            Phần mềm & thông tin sử dụng
+        </div>
+    `;
+
+            header.appendChild(logo);
+            header.appendChild(title);
+
+            /* ================= BODY ================= */
+            const bodyClone = content.cloneNode(true);
+            bodyClone.style.boxShadow = "none";
+            bodyClone.style.borderRadius = "0";
+
+            /* ❌ REMOVE QR khỏi body clone (nếu có) */
+            // const qrInBody = bodyClone.querySelector("img");
+            // if (qrInBody) qrInBody.remove();
+
+            /* ================= WRAPPER ================= */
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "fixed";
+            wrapper.style.left = "-10000px";
+            wrapper.style.top = "0";
+            wrapper.style.width = "794px"; // A4 px
+            wrapper.style.padding = "15px";
+            wrapper.style.background = "#fff";
+            wrapper.style.fontFamily = "system-ui, sans-serif";
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(bodyClone);
+            document.body.appendChild(wrapper);
+
+            /* ================= WAIT LOGO ================= */
+            await new Promise(r => {
+                logo.onload = r;
+                logo.onerror = r;
+            });
+
+            /* ================= HTML → CANVAS ================= */
+            const canvas = await html2canvas(wrapper, {
+                scale: 2,
+                backgroundColor: "#fff",
+                windowWidth: 794,
+                windowHeight: wrapper.scrollHeight
+            });
+
+            document.body.removeChild(wrapper);
+
+            /* ================= PDF ================= */
+            const pdf = new jsPDF("p", "mm", "a4");
+            const pageW = 210;
+            const pageH = 297;
+
+            const imgW = pageW;
+            const imgH = (canvas.height * imgW) / canvas.width;
+
+            /* ⚠️ Scale để không vượt quá 1 trang */
+            const finalH = Math.min(imgH, pageH - 20);
+
+            pdf.addImage(
+                canvas.toDataURL("image/jpeg", 1),
+                "JPEG",
+                0,
+                0,
+                imgW,
+                finalH
+            );
+
+            /* ================= QR BOTTOM RIGHT (NO SCALE BUG) ================= */
+            // if (window.qrImageBase64) {
+            //     const img = new Image();
+            //     img.src = window.qrImageBase64;
+
+            //     await new Promise(r => {
+            //         img.onload = r;
+            //         img.onerror = r;
+            //     });
+
+            //     // Kích thước gốc (px)
+            //     const pxW = img.width;
+            //     const pxH = img.height;
+
+            //     // Đổi px → mm (96dpi ≈ 25.4mm)
+            //     const mmPerPx = 25.4 / 96;
+
+            //     let qrW = pxW * mmPerPx;
+            //     let qrH = pxH * mmPerPx;
+
+            //     // Giới hạn tối đa (để không quá to)
+            //     const maxSize = 60; // mm
+            //     const scale = Math.min(maxSize / qrW, maxSize / qrH, 1);
+
+            //     qrW *= scale;
+            //     qrH *= scale;
+
+            //     const margin = 15;
+
+            //     pdf.addImage(
+            //         window.qrImageBase64,
+            //         window.qrImageBase64.includes("jpeg") ? "JPEG" : "PNG",
+            //         pageW - qrW - margin,
+            //         pageH - qrH - margin,
+            //         qrW,
+            //         qrH
+            //     );
+            // }
+
+            /* ================= SAVE ================= */
+            pdf.save(`bien-ban-ban-giao-${mst.value || "khach-hang"}.pdf`);
+        }
+
+        function toggleTaxCheckbox() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const taxWrapper = document.getElementById("taxWrapper");
+
+            if (type === "DN") {
+                taxWrapper.style.display = "block";
+            } else {
+                taxWrapper.style.display = "none";
+                chkTax.checked = false; // reset để không render nhầm
+            }
+        }
+
+        toggleTaxCheckbox();
+        render();
+    </script>
+</body>
+
+</html>

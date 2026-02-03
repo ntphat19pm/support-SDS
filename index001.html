@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>EasyInvoice Generator</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f4f6f8;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 40px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        textarea {
+            resize: vertical
+        }
+
+        .preview {
+            background: #f9fafb;
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .title {
+            font-weight: 700;
+            color: #dc2626;
+        }
+
+        .divider {
+            color: #999
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .actions button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>📄 Tạo nội dung bàn giao</h2>
+
+        <div class="grid">
+            <div><label>Mã số thuế</label><input id="mst"></div>
+            <div><label>Tên HKD / DN</label><input id="company"></div>
+            <div><label id="labelChu">Chủ hộ kinh doanh</label><input id="owner"></div>
+            <div><label>Số điện thoại</label><input id="phone"></div>
+            <div><label>Email</label><input id="email"></div>
+            <div><label>Địa chỉ</label><input id="address"></div>
+            <div><label>Số tiền phải trả</label><input id="payAmount" type="number"></div>
+            <div><label>Nội dung thanh toán</label><input id="payContent"></div>
+            <div>
+                <label>Ghi chú</label>
+                <textarea id="note" rows="3"></textarea>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="preview">
+            <div class="card" id="content"></div>
+            <div class="actions">
+                <button onclick="copyAll()">📋 Copy</button>
+                <button onclick="exportPDF()" style="background:#dc2626;color:#fff">📄 Xuất PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ================== GLOBAL ================== */
+        let qrBase64 = "";
+        let lastMST = "";
+
+        /* ========== PASTE QR TỪ CLIPBOARD ========== */
+        document.addEventListener("paste", e => {
+            const item = [...e.clipboardData.items].find(i => i.type.includes("image"));
+            if (!item) return;
+
+            const file = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = () => {
+                qrBase64 = reader.result;
+                render();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        /* ================= RENDER ================= */
+        function line(t) {
+            return `<div class="divider">----------------------------</div>
+            <div class="title">${t}</div>`;
+        }
+
+        function render() {
+            let html = line("THÔNG TIN THANH TOÁN");
+            html += `
+    ${company.value}<br>
+    MST: ${mst.value}<br>
+    Địa chỉ: ${address.value}<br>
+    SĐT: ${phone.value}<br>
+    Email: ${email.value}<br>
+    Ghi chú: ${note.value}<br>
+    `;
+
+            html += `
+    ${line("THANH TOÁN")}
+    Số tài khoản: V2SD08112998<br>
+    Ngân hàng: BIDV CN Thanh Xuân<br>
+    Số tiền: ${Number(payAmount.value || 0).toLocaleString("vi-VN")}<br>
+    Nội dung: ${payContent.value}<br>
+    `;
+
+            content.innerHTML = html;
+        }
+
+        document.querySelectorAll("input,textarea").forEach(e =>
+            e.addEventListener("input", render)
+        );
+
+        /* ================= COPY ================= */
+        function copyAll() {
+            navigator.clipboard.writeText(content.innerText);
+            alert("Đã copy");
+        }
+
+        /* ================= EXPORT PDF ================= */
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "fixed";
+            wrapper.style.left = "-10000px";
+            wrapper.style.width = "794px";
+            wrapper.style.padding = "20px";
+            wrapper.style.background = "#fff";
+
+            const bodyClone = content.cloneNode(true);
+            wrapper.appendChild(bodyClone);
+            document.body.appendChild(wrapper);
+
+            const canvas = await html2canvas(wrapper, { scale: 2 });
+            const imgData = canvas.toDataURL("image/jpeg", 1.0);
+
+            const pdf = new jsPDF("p", "mm", "a4");
+            pdf.addImage(imgData, "JPEG", 0, 0, 210, (canvas.height * 210) / canvas.width);
+
+            /* ==== QR GÓC PHẢI – DÍNH ĐÁY ==== */
+            if (qrBase64) {
+                const size = 45;
+                const margin = 15;
+                pdf.addImage(
+                    qrBase64,
+                    "PNG",
+                    210 - size - margin,
+                    297 - size - margin,
+                    size,
+                    size
+                );
+            }
+
+            pdf.save(`bien-ban-${mst.value || "khach-hang"}.pdf`);
+            document.body.removeChild(wrapper);
+        }
+
+        render();
+    </script>
+</body>
+
+</html>
