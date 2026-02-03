@@ -278,9 +278,23 @@
                 <button class="btn-copy" style="background:#dc2626" onclick="exportPDF()">📄 Xuất PDF</button>
             </div>
         </div>
+
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h3>Lịch sử gần nhất</h3>
+            <button type="button" onclick="clearAllHistory()" style="font-size:12px;padding:2px 6px;cursor:pointer">
+                ❌ Xóa tất cả
+            </button>
+        </div>
+        <div id="historyBox"></div>
+
     </div>
 
     <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            renderHistory();
+        });
+
         /* ================= GLOBAL ================= */
         let lastMST = "";
         const mstError = document.getElementById("mstError");
@@ -304,7 +318,6 @@
 
                 toggleTaxCheckbox();
                 render();
-                resetFormByMST();
             })
         );
 
@@ -316,7 +329,12 @@
             email.value = "";
             address.value = "";
             note.value = "";
+            payAmount.value = "";
+            payContent.value = "";
+            qrPaste.value = "";
+            qrPreview.src = "";
             render();
+            renderHistory();
             clearEmailError();
         }
 
@@ -368,6 +386,8 @@
             if (tax !== lastMST) {
                 resetFormByMST();
                 lastMST = tax;
+            } else {
+                // MST load từ history → KHÔNG reset
             }
 
             try {
@@ -409,6 +429,10 @@
                 }
 
                 render();
+                saveHistory();
+                renderHistory();
+
+
             } catch (e) {
                 showMSTError("Không thể tra cứu Mã số thuế. Vui lòng thử lại");
                 console.error(e);
@@ -651,13 +675,159 @@ ${line("THÔNG TIN THANH TOÁN")}
             email.classList.remove("error");
         }
 
+        /* ================= AUTO SAVE WHEN USER EDIT ================= */
+        ["company", "owner", "phone", "email", "address", "note"]
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                el.addEventListener("blur", () => {
+                    if (!mst.value) return;      // chưa có MST thì không lưu
+                    saveHistory();               // 🔥 lưu lại dữ liệu mới nhập tay
+                    renderHistory();
+                });
+            });
 
 
         /* ================= INIT ================= */
         toggleTaxCheckbox();
         render();
+        renderHistory();
+
     </script>
 
+    <script>
+        const HISTORY_KEY = "mst_history_v2";
+        const MAX_HISTORY = 10;
+
+
+        /* ================= SAVE HISTORY ================= */
+        function saveHistory() {
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!mst.value || !typeEl) return;
+
+            const record = {
+                mst: mst.value.trim(),
+                type: typeEl.value,
+
+                company: company.value,
+                owner: owner.value,      // 👈 người đại diện / chủ hộ
+                phone: phone.value,
+                email: email.value,
+                address: address.value,
+                note: note.value,
+
+                // checkbox
+                chkInvoice: chkInvoice.checked,
+                chkPos: chkPos.checked,
+                chkBook: chkBook.checked,
+                chkTax: chkTax.checked,
+                chkPay: chkPay.checked,
+
+                // thanh toán
+                payAmount: payAmount.value,
+                payContent: payContent.value,
+
+                // QR
+                qrImageBase64: window.qrImageBase64 || null,
+
+                time: Date.now()
+            };
+
+            let list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+
+            // ❌ xoá MST trùng
+            list = list.filter(i => i.mst !== record.mst);
+
+            // ➕ thêm lên đầu
+            list.unshift(record);
+
+            // ✂️ tối đa 10
+            list = list.slice(0, MAX_HISTORY);
+
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+        }
+
+        /* ================= LOAD HISTORY ================= */
+        function loadHistory(mstValue) {
+            const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+            const item = list.find(i => i.mst === mstValue);
+            if (!item) return;
+
+            // type
+            document.querySelector(`input[name="type"][value="${item.type}"]`).checked = true;
+
+            mst.value = item.mst;
+            company.value = item.company;
+            owner.value = item.owner;
+            phone.value = item.phone;
+            email.value = item.email;
+            address.value = item.address;
+            note.value = item.note;
+
+            // checkbox
+            chkInvoice.checked = item.chkInvoice;
+            chkPos.checked = item.chkPos;
+            chkBook.checked = item.chkBook;
+            chkTax.checked = item.chkTax;
+            chkPay.checked = item.chkPay;
+
+            // thanh toán
+            payAmount.value = item.payAmount || "";
+            payContent.value = item.payContent || "";
+
+            // QR
+            if (item.qrImageBase64) {
+                window.qrImageBase64 = item.qrImageBase64;
+                qrPreview.src = item.qrImageBase64;
+                qrPreview.style.display = "block";
+            } else {
+                window.qrImageBase64 = null;
+                qrPreview.style.display = "none";
+            }
+
+            lastMST = item.mst;
+
+            clearMSTError();
+            clearEmailError();
+            toggleTaxCheckbox();
+            render();
+        }
+
+
+        /* ================= GET HISTORY ================= */
+        function getHistory() {
+            return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        }
+
+        function renderHistory() {
+            const box = document.getElementById("historyBox");
+            const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+
+            if (!list.length) {
+                box.innerHTML = "<i>Chưa có dữ liệu</i>";
+                return;
+            }
+
+            box.innerHTML = list.map(i => `
+        <div style="cursor:pointer;padding:4px 0;color:#0a58ca"
+             onclick="loadHistory('${i.mst}')">
+            ${i.mst} – ${i.company || "(chưa tên)"}
+        </div>
+    `).join("");
+        }
+
+        /* ================= CLEAR ALL HISTORY ================= */
+        function clearAllHistory() {
+            if (!confirm("Bạn chắc chắn muốn xóa toàn bộ lịch sử?")) return;
+
+            localStorage.removeItem(HISTORY_KEY);
+
+            lastMST = "";
+            renderHistory();
+        }
+
+    </script>
 </body>
 
 </html>
