@@ -291,9 +291,6 @@
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            renderHistory();
-        });
 
         /* ================= GLOBAL ================= */
         let lastMST = "";
@@ -492,6 +489,7 @@ Email nhận thông tin: ${email.value}<br>`;
 
             if (type === "DN" && chkTax.checked) {
                 html += `${line("THUẾ ĐIỆN TỬ")}
+                https://thuedientu.gdt.gov.vn<br>
 TK: ${mst.value}-ql<br>
 MK: tct@123<br>`;
             }
@@ -826,6 +824,10 @@ ${line("THÔNG TIN THANH TOÁN")}
             lastMST = "";
             renderHistory();
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            renderHistory();
+        });
 
     </script>
 </body>
