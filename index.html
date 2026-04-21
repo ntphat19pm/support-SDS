@@ -343,8 +343,8 @@
 
             const type = typeEl.value;
 
-            if (type === "DN" && tax.length !== 10) {
-                showMSTError("Doanh nghiệp phải có Mã số thuế 10 số");
+            if (type === "DN" && tax.length !== 10 && tax.length !== 14) {
+                showMSTError("Doanh nghiệp phải có Mã số thuế 10 hoặc 14 số");
                 return false;
             }
 
