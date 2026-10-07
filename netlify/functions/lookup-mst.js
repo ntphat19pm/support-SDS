@@ -3,8 +3,12 @@ export default async (req) => {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
   };
 
+  // ============================================================
+  // CORS PREFLIGHT
+  // ============================================================
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -12,6 +16,9 @@ export default async (req) => {
     });
   }
 
+  // ============================================================
+  // CHỈ CHO PHÉP GET
+  // ============================================================
   if (req.method !== "GET") {
     return new Response(
       JSON.stringify({
@@ -20,14 +27,14 @@ export default async (req) => {
       }),
       {
         status: 405,
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-        },
+        headers,
       },
     );
   }
 
+  // ============================================================
+  // LẤY MST
+  // ============================================================
   const url = new URL(req.url);
   const tax = (url.searchParams.get("mst") || "").trim();
 
@@ -39,22 +46,53 @@ export default async (req) => {
       }),
       {
         status: 400,
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-        },
+        headers,
       },
     );
   }
 
   // ============================================================
+  // DEBUG
+  // ============================================================
+  const debug = {
+    mst: tax,
+    invoy: {
+      attempted: false,
+      status: null,
+      statusText: "",
+      success: false,
+      hasTaxCode: false,
+      response: null,
+      error: null,
+    },
+    vietqr: {
+      attempted: false,
+      status: null,
+      statusText: "",
+      success: false,
+      response: null,
+      error: null,
+    },
+    xinvoice: {
+      attempted: false,
+      status: null,
+      statusText: "",
+      success: false,
+      response: null,
+      error: null,
+    },
+  };
+
+  // ============================================================
   // 1. INVOY
   // ============================================================
-
   try {
+    debug.invoy.attempted = true;
+
     const invoyUrl = `https://invoy.io.vn/api/v1/public/lookup-mst?mst=${encodeURIComponent(tax)}`;
 
-    console.log("========== INVOY ==========");
+    console.log("=================================");
+    console.log("INVOY REQUEST");
     console.log("URL:", invoyUrl);
 
     const response = await fetch(invoyUrl, {
@@ -65,6 +103,9 @@ export default async (req) => {
       },
     });
 
+    debug.invoy.status = response.status;
+    debug.invoy.statusText = response.statusText;
+
     console.log("Invoy status:", response.status);
     console.log("Invoy statusText:", response.statusText);
 
@@ -72,19 +113,27 @@ export default async (req) => {
 
     console.log("Invoy raw response:", rawText);
 
+    // Giới hạn response debug để tránh trả dữ liệu quá lớn
+    debug.invoy.response = rawText.substring(0, 3000);
+
     if (response.ok) {
-      let data;
+      let data = null;
 
       try {
         data = JSON.parse(rawText);
       } catch (parseError) {
+        debug.invoy.error =
+          "Response không phải JSON hợp lệ: " + parseError.message;
+
         console.error("Invoy JSON parse lỗi:", parseError);
-        data = null;
       }
 
       console.log("Invoy parsed data:", data);
 
       if (data && data.taxCode) {
+        debug.invoy.success = true;
+        debug.invoy.hasTaxCode = true;
+
         console.log("✅ INVOY THÀNH CÔNG");
 
         return new Response(
@@ -104,44 +153,72 @@ export default async (req) => {
               businessLine: data.businessLine || null,
               capital: data.capital || null,
             },
+            debug,
           }),
           {
             status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*",
-            },
+            headers,
           },
         );
+      } else {
+        debug.invoy.error = "Invoy trả response nhưng không có taxCode.";
       }
     } else {
-      console.error("❌ INVOY HTTP ERROR:", response.status);
+      debug.invoy.error = `Invoy HTTP ${response.status} ${response.statusText}`;
     }
   } catch (error) {
+    debug.invoy.error = error.message || String(error);
+
     console.error("❌ INVOY FETCH ERROR:", error);
   }
 
   // ============================================================
   // 2. VIETQR
   // ============================================================
-
   try {
-    const response = await fetch(
-      `https://api.vietqr.io/v2/business/${encodeURIComponent(tax)}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
+    debug.vietqr.attempted = true;
+
+    const vietqrUrl = `https://api.vietqr.io/v2/business/${encodeURIComponent(tax)}`;
+
+    console.log("=================================");
+    console.log("VIETQR REQUEST");
+    console.log("URL:", vietqrUrl);
+
+    const response = await fetch(vietqrUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0",
       },
-    );
+    });
+
+    debug.vietqr.status = response.status;
+    debug.vietqr.statusText = response.statusText;
+
+    console.log("VietQR status:", response.status);
+
+    const rawText = await response.text();
+
+    debug.vietqr.response = rawText.substring(0, 3000);
 
     if (response.ok) {
-      const json = await response.json();
+      let json = null;
 
-      console.log("VIETQR:", json);
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseError) {
+        debug.vietqr.error =
+          "Response không phải JSON hợp lệ: " + parseError.message;
+      }
 
-      if (json.code === "00" && json.data) {
+      console.log("VietQR:", json);
+
+      if (json && json.code === "00" && json.data) {
         const d = json.data;
+
+        debug.vietqr.success = true;
+
+        console.log("✅ VIETQR THÀNH CÔNG");
 
         return new Response(
           JSON.stringify({
@@ -154,44 +231,74 @@ export default async (req) => {
               phone: d.phone || "",
               represent: d.legalRepresentative || d.represent || "",
             },
+            debug,
           }),
           {
             status: 200,
-            headers: {
-              ...headers,
-              "Content-Type": "application/json",
-            },
+            headers,
           },
         );
+      } else {
+        debug.vietqr.error = "VietQR không trả dữ liệu hợp lệ.";
       }
+    } else {
+      debug.vietqr.error = `VietQR HTTP ${response.status} ${response.statusText}`;
     }
   } catch (error) {
-    console.error("VietQR API lỗi:", error);
+    debug.vietqr.error = error.message || String(error);
+
+    console.error("❌ VIETQR FETCH ERROR:", error);
   }
 
   // ============================================================
   // 3. XINVOICE
   // ============================================================
-
   try {
-    const response = await fetch(
-      `https://api.xinvoice.vn/gdt-api/tax-payer/${encodeURIComponent(tax)}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
+    debug.xinvoice.attempted = true;
+
+    const xinvoiceUrl = `https://api.xinvoice.vn/gdt-api/tax-payer/${encodeURIComponent(tax)}`;
+
+    console.log("=================================");
+    console.log("XINVOICE REQUEST");
+    console.log("URL:", xinvoiceUrl);
+
+    const response = await fetch(xinvoiceUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0",
       },
-    );
+    });
+
+    debug.xinvoice.status = response.status;
+    debug.xinvoice.statusText = response.statusText;
+
+    console.log("XInvoice status:", response.status);
+
+    const rawText = await response.text();
+
+    debug.xinvoice.response = rawText.substring(0, 3000);
 
     if (response.ok) {
-      const json = await response.json();
+      let json = null;
 
-      console.log("XINVOICE:", json);
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseError) {
+        debug.xinvoice.error =
+          "Response không phải JSON hợp lệ: " + parseError.message;
+      }
+
+      console.log("XInvoice:", json);
 
       if (
         json &&
         (json.name || json.address || json.legalRepresentative || json.phone)
       ) {
+        debug.xinvoice.success = true;
+
+        console.log("✅ XINVOICE THÀNH CÔNG");
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -203,37 +310,39 @@ export default async (req) => {
               phone: json.phone || "",
               represent: json.legalRepresentative || "",
             },
+            debug,
           }),
           {
             status: 200,
-            headers: {
-              ...headers,
-              "Content-Type": "application/json",
-            },
+            headers,
           },
         );
+      } else {
+        debug.xinvoice.error =
+          "XInvoice trả response nhưng không có dữ liệu doanh nghiệp.";
       }
+    } else {
+      debug.xinvoice.error = `XInvoice HTTP ${response.status} ${response.statusText}`;
     }
   } catch (error) {
-    console.error("XInvoice API lỗi:", error);
+    debug.xinvoice.error = error.message || String(error);
+
+    console.error("❌ XINVOICE FETCH ERROR:", error);
   }
 
   // ============================================================
   // KHÔNG TÌM THẤY
   // ============================================================
-
   return new Response(
     JSON.stringify({
       success: false,
       source: null,
       message: "Không tìm thấy thông tin mã số thuế",
+      debug,
     }),
     {
       status: 404,
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-      },
+      headers,
     },
   );
 };
