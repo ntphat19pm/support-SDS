@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     // ==============================
     // CORS
     // ==============================
@@ -88,16 +88,27 @@ export default async function handler(req, res) {
         });
 
         // ==============================
-        // Đọc response dạng text trước
+        // Đọc response dạng text
         // ==============================
         const rawText = await response.text();
 
-        console.log("Invoy HTTP status:", response.status);
-        console.log("Invoy status text:", response.statusText);
-        console.log("Invoy response:", rawText);
+        console.log(
+            "Invoy HTTP status:",
+            response.status
+        );
+
+        console.log(
+            "Invoy status text:",
+            response.statusText
+        );
+
+        console.log(
+            "Invoy response:",
+            rawText
+        );
 
         // ==============================
-        // Parse JSON nếu có
+        // Parse JSON
         // ==============================
         let data = null;
 
@@ -108,22 +119,25 @@ export default async function handler(req, res) {
         }
 
         // ==============================
-        // Thành công
+        // Invoy thành công
         // ==============================
         if (response.ok) {
             return res.status(200).json({
                 success: true,
+
                 invoy: {
                     status: response.status,
                     statusText: response.statusText
                 },
+
                 data: data,
+
                 raw: data ? null : rawText
             });
         }
 
         // ==============================
-        // Invoy lỗi HTTP
+        // Invoy trả HTTP error
         // ==============================
         return res.status(200).json({
             success: false,
@@ -138,21 +152,24 @@ export default async function handler(req, res) {
 
             data: data,
 
-            // Giữ raw response để xác định
-            // có phải Cloudflare hay không
             raw: rawText.slice(0, 10000)
         });
 
     } catch (error) {
-        console.error("Invoy request error:", error);
+        console.error(
+            "Invoy request error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
 
             message: "Không thể gọi Invoy",
 
-            error: error?.message || String(error)
+            error:
+                error?.message ||
+                String(error)
         });
     }
-}
+};
 ```
