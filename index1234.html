@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tạo nội dung bàn giao</title>
+
+    <!-- Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+
+    <style>
+        :root {
+            --brand-primary: #0d6efd;
+            --brand-hkd: #22c55e;
+            --brand-easybook: #897a19;
+            --brand-easypos: #511989;
+            --brand-tax: #891919;
+            --border: #ddd;
+            --danger: #dc2626;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+        }
+
+        h2,
+        h3 {
+            margin-top: 0
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 40px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        input {
+            width: 96%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        hr {
+            margin: 24px 0
+        }
+
+        .type-select {
+            display: flex;
+            gap: 14px;
+        }
+
+        .type-option {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .type-option input {
+            display: none
+        }
+
+        .type-option:has(input:checked[value="HKD"]) {
+            border-color: var(--brand-hkd);
+            background: #f0fff5;
+            color: var(--brand-hkd);
+        }
+
+        .type-option:has(input:checked[value="DN"]) {
+            border-color: var(--brand-primary);
+            background: #f0f7ff;
+            color: var(--brand-primary);
+        }
+
+        .display-options {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .display-item {
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            background: #fafafa;
+            text-align: center;
+        }
+
+        .display-item input {
+            display: none
+        }
+
+        .display-item:has(input:checked) {
+            border-color: var(--brand-primary);
+            background: #f0f7ff;
+        }
+
+        .display-item.payment:has(input:checked) {
+            border-color: var(--brand-hkd);
+            background: #f0fff5;
+        }
+
+        .display-item.easybook:has(input:checked) {
+            border-color: var(--brand-easybook);
+            background: #fffff0;
+        }
+
+        .display-item.easypos:has(input:checked) {
+            border-color: var(--brand-easypos);
+            background: #f0f7ff;
+        }
+
+        .display-item.tax:has(input:checked) {
+            border-color: var(--brand-tax);
+            background: #fff0f0;
+        }
+
+        .preview {
+            background: #f9fafb;
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .title {
+            font-weight: 700;
+            color: var(--danger);
+            display: block;
+            margin: 8px 0 4px;
+        }
+
+        .divider {
+            color: #999;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-copy {
+            background: #0d6efd;
+            color: #fff
+        }
+
+        @media(max-width:700px) {
+
+            .grid,
+            .display-options {
+                grid-template-columns: 1fr
+            }
+        }
+
+        textarea {
+            width: 96%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+            resize: vertical;
+            /* cho kéo cao thấp */
+            font-family: inherit;
+        }
+
+        input.error {
+            border: 1px solid red;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>📄 Tạo nội dung bàn giao</h2>
+
+        <div class="type-select">
+            <label class="type-option">
+                <input type="radio" name="type" value="HKD" checked> Hộ kinh doanh
+            </label>
+            <label class="type-option">
+                <input type="radio" name="type" value="DN"> Doanh nghiệp
+            </label>
+        </div>
+
+        <hr>
+        <div id="mstError"
+            style="color:red;font-size: 15px;margin-top: -15px;margin-bottom: 14px;display:none;font-weight: bold;">
+        </div>
+        <div id="emailError" class="error-text"
+            style="color:red;font-size: 15px;margin-top: -15px;margin-bottom: 14px;display:none;font-weight: bold;">
+        </div>
+
+        <div class="grid">
+            <div><label>Mã số thuế</label><input id="mst"></div>
+            <div><label>Tên HKD / DN</label><input id="company"></div>
+            <div><label id="labelChu">Chủ hộ kinh doanh</label><input id="owner"></div>
+            <div><label>Số điện thoại</label><input id="phone"></div>
+            <div><label>Email</label><input id="email"></div>
+            <div><label>Địa chỉ</label><input id="address"></div>
+            <div><label>Số tiền phải trả</label><input id="payAmount" type="number"></div>
+            <div><label>Nội dung thanh toán</label><input id="payContent"></div>
+            <div>
+                <label for="note">Ghi chú</label>
+                <textarea id="note" rows="16" placeholder="Nhập ghi chú..."></textarea>
+            </div>
+            <!-- ✅ THÊM INPUT PASTE QR (CÁCH 1) -->
+            <div>
+                <label>Dán hình mã QR (Ctrl + V)</label>
+                <input id="qrPaste" placeholder="Click vào đây rồi Ctrl + V hình QR">
+                <img id="qrPreview" style="display:none;max-width:200px;margin-top:8px;border-radius:8px;">
+            </div>
+
+        </div>
+
+        <hr>
+
+        <h3>Hiển thị nội dung</h3>
+        <div class="display-options">
+            <label class="display-item"><input type="checkbox" id="chkInvoice"> EasyInvoice</label>
+            <label class="display-item easypos"><input type="checkbox" id="chkPos"> EasyPOS</label>
+            <label class="display-item easybook"><input type="checkbox" id="chkBook"> EasyBook</label>
+            <label class="display-item payment"><input type="checkbox" id="chkPay"> Thanh toán</label>
+            <label class="display-item tax" id="taxWrapper" style="display:none">
+                <input type="checkbox" id="chkTax"> Thuế điện tử
+            </label>
+        </div>
+
+        <hr>
+
+        <h3>Xem trước</h3>
+        <div class="preview">
+            <div class="card" id="content"></div>
+            <div class="actions">
+                <button class="btn-copy" onclick="copyAll()">📋 Copy Zalo format</button>
+                <button class="btn-copy" style="background:#dc2626" onclick="exportPDF()">📄 Xuất PDF</button>
+            </div>
+        </div>
+
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h3>Lịch sử gần nhất</h3>
+            <button type="button" onclick="clearAllHistory()" style="font-size:12px;padding:2px 6px;cursor:pointer">
+                ❌ Xóa tất cả
+            </button>
+        </div>
+        <div id="historyBox"></div>
+
+    </div>
+
+    <script>
+
+        /* ================= GLOBAL ================= */
+        let lastMST = "";
+        const mstError = document.getElementById("mstError");
+        const els = document.querySelectorAll("input");
+
+        /* ================= INPUT RENDER ================= */
+        els.forEach(e => e.addEventListener("input", render));
+
+        /* ================= TYPE CHANGE ================= */
+        document.querySelectorAll('input[name="type"]').forEach(r =>
+            r.addEventListener("change", () => {
+                labelChu.textContent = r.value === "DN"
+                    ? "Người đại diện pháp luật"
+                    : "Chủ hộ kinh doanh";
+
+                clearMSTError();
+
+                if (mst.value.trim()) {
+                    validateMST(); // kiểm tra lại khi đổi DN / HKD
+                }
+
+                toggleTaxCheckbox();
+                render();
+            })
+        );
+
+        /* ================= RESET FORM ================= */
+        function resetFormByMST() {
+            company.value = "";
+            owner.value = "";
+            phone.value = "";
+            email.value = "";
+            address.value = "";
+            note.value = "";
+            payAmount.value = "";
+            payContent.value = "";
+            qrPaste.value = "";
+            qrPreview.src = "";
+            render();
+            renderHistory();
+            clearEmailError();
+        }
+
+        /* ================= VALIDATE MST ================= */
+        function validateMST() {
+            const tax = mst.value.trim();
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!tax || !typeEl) return true;
+
+            const type = typeEl.value;
+
+            if (type === "DN" && tax.length !== 10 && tax.length !== 14) {
+                showMSTError("Doanh nghiệp phải có Mã số thuế 10 hoặc 14 số");
+                return false;
+            }
+
+            if (type === "HKD" && tax.length !== 12) {
+                showMSTError("Hộ kinh doanh phải có Mã số thuế 12 số");
+                return false;
+            }
+
+            clearMSTError();
+            return true;
+        }
+
+        /* ================= CLEAR ERROR WHEN TYPING ================= */
+        mst.addEventListener("input", clearMSTError);
+        email.addEventListener("input", clearEmailError);
+
+        email.addEventListener("blur", () => {
+            if (email.value && !isValidEmail(email.value)) {
+                showEmailError("Vui lòng nhập đúng định dạng email");
+            } else {
+                clearEmailError();
+            }
+        });
+
+        /* ================= MST BLUR ================= */
+        mst.addEventListener("blur", async () => {
+            const tax = mst.value.trim();
+
+            clearMSTError();
+            if (!tax) return;
+
+            // ❌ Sai MST → không tra API
+            if (!validateMST()) return;
+
+            // MST thay đổi → reset form
+            if (tax !== lastMST) {
+                resetFormByMST();
+                lastMST = tax;
+            } else {
+                // MST load từ history → KHÔNG reset
+            }
+            try {
+                const response = await fetch(
+                    `/api/lookup-mst?mst=${encodeURIComponent(tax)}`
+                );
+
+                const result = await response.json();
+
+                console.log("LOOKUP MST:", result);
+
+                if (result.success && result.data) {
+                    const d = result.data;
+
+                    if (d.name) {
+                        company.value = d.name;
+                    }
+
+                    if (d.address) {
+                        address.value = d.address;
+                    }
+
+                    if (d.phone) {
+                        phone.value = d.phone;
+                    }
+
+                    if (d.represent) {
+                        owner.value = d.represent;
+                    }
+
+                    found = true;
+                }
+
+            } catch (error) {
+                console.error("Lỗi tra cứu MST:", error);
+            }
+        });
+
+        /* ================= RENDER ================= */
+        function line(title) {
+            return `<div class="divider">----------------------------------------</div>
+    <span class="title">${title}</span>`;
+        }
+
+        function render() {
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!typeEl) {
+                content.innerHTML = "";
+                return;
+            }
+
+            const type = typeEl.value;
+            const passEI = type === "HKD" ? mst.value : "pass!@#$%";
+
+            let html = type === "DN"
+                ? line("THÔNG TIN DOANH NGHIỆP")
+                : line("THÔNG TIN HỘ KINH DOANH");
+
+            html += `
+${company.value}<br>
+MST: ${mst.value}<br>
+${labelChu.textContent}: ${owner.value}<br>
+Địa chỉ: ${address.value}<br>
+SĐT: ${phone.value}<br>
+Email: ${email.value}<br>
+Ghi chú: ${note.value}<br>
+`;
+
+            if (chkInvoice.checked) {
+                html += `${line("PHẦN MỀM EASYINVOICE")}
+https://app.easyinvoice.vn<br>
+MST: ${mst.value}<br>
+TK: ${mst.value}<br>
+MK: ${passEI}<br>`;
+            }
+
+            if (chkPos.checked) {
+                html += `${line("PHẦN MỀM EASYPOS")}
+https://app.easypos.vn<br>
+TK: ${phone.value}<br>
+MK: Epos@123<br>`;
+            }
+
+            if (chkBook.checked) {
+                html += `${line("PHẦN MỀM EASYBOOK")}
+https://app88.easybooks.vn<br>
+Email nhận thông tin: ${email.value}<br>`;
+            }
+
+            if (type === "DN" && chkTax.checked) {
+                html += `${line("THUẾ ĐIỆN TỬ")}
+                https://thuedientu.gdt.gov.vn<br>
+TK: ${mst.value}-ql<br>
+MK: tct@123<br>`;
+            }
+
+            if (chkPay.checked) {
+                const money = payAmount.value
+                    ? Number(payAmount.value).toLocaleString("vi-VN")
+                    : "";
+
+                html += `
+${line("THÔNG TIN THANH TOÁN")}
+
+<div style="display:flex;gap:16px;align-items:flex-start;">
+    <div style="flex:1">
+        Số tài khoản: V2SD08112998<br>
+        Tên tài khoản: CTY CO PHAN DAU TU CONG NGHE VA THUONG MAI SOFTDREAMS<br>
+        Ngân hàng: BIDV CN Thanh Xuân<br>
+        Số tiền phải trả: ${money}<br>
+        Nội dung: ${payContent.value}<br>
+    </div>
+
+    ${window.qrImageBase64
+                        ? `<div style="width:200px;text-align:center">
+            <img src="${window.qrImageBase64}"
+                 style="width:140px;height:auto;margin-top:-31px">
+           </div>`
+                        : ``}
+</div>`;
+            }
+
+            content.innerHTML = html;
+        }
+
+        /* ================= COPY ================= */
+        function copyAll() {
+            const text = content.innerText
+                .split("\n")
+                .map(l => l.trimStart())
+                .join("\n")
+                .trim();
+
+            navigator.clipboard.writeText(text);
+            alert("Đã copy nội dung để gửi Zalo ✅");
+        }
+
+        /* ================= QR PASTE ================= */
+        const qrPaste = document.getElementById("qrPaste");
+        const qrPreview = document.getElementById("qrPreview");
+
+        qrPaste.addEventListener("paste", e => {
+            const items = e.clipboardData.items;
+            for (const item of items) {
+                if (item.type.includes("image")) {
+                    const file = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        qrPreview.src = reader.result;
+                        qrPreview.style.display = "block";
+                        window.qrImageBase64 = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        /* ================= PDF ================= */
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+
+            const header = document.createElement("div");
+            header.style.textAlign = "center";
+            header.style.marginBottom = "10px";
+
+            const logo = new Image();
+            logo.src = "./logo-softdream-02.png";
+            logo.style.height = "60px";
+            logo.style.display = "block";
+            logo.style.margin = "0 auto 8px";
+
+            const title = document.createElement("div");
+            title.innerHTML = `
+        <div style="font-size:18px;font-weight:700">BIÊN BẢN BÀN GIAO</div>
+        <div style="font-size:15px;color:#555">Phần mềm & thông tin sử dụng</div>
+    `;
+
+            header.appendChild(logo);
+            header.appendChild(title);
+
+            const bodyClone = content.cloneNode(true);
+            bodyClone.style.boxShadow = "none";
+            bodyClone.style.borderRadius = "0";
+
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "fixed";
+            wrapper.style.left = "-10000px";
+            wrapper.style.top = "0";
+            wrapper.style.width = "794px";
+            wrapper.style.padding = "15px";
+            wrapper.style.background = "#fff";
+            wrapper.style.fontFamily = "system-ui, sans-serif";
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(bodyClone);
+            document.body.appendChild(wrapper);
+
+            await new Promise(r => {
+                logo.onload = r;
+                logo.onerror = r;
+            });
+
+            const canvas = await html2canvas(wrapper, {
+                scale: 2,
+                backgroundColor: "#fff",
+                windowWidth: 794,
+                windowHeight: wrapper.scrollHeight
+            });
+
+            document.body.removeChild(wrapper);
+
+            const pdf = new jsPDF("p", "mm", "a4");
+            const pageW = 210;
+            const pageH = 297;
+
+            const imgW = pageW;
+            const imgH = (canvas.height * imgW) / canvas.width;
+            const finalH = Math.min(imgH, pageH - 20);
+
+            pdf.addImage(
+                canvas.toDataURL("image/jpeg", 1),
+                "JPEG",
+                0,
+                0,
+                imgW,
+                finalH
+            );
+
+            pdf.save(`bien-ban-ban-giao-${mst.value || "khach-hang"}.pdf`);
+        }
+
+        /* ================= TOGGLE TAX ================= */
+        function toggleTaxCheckbox() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const taxWrapper = document.getElementById("taxWrapper");
+
+            if (type === "DN") {
+                taxWrapper.style.display = "block";
+            } else {
+                taxWrapper.style.display = "none";
+                chkTax.checked = false;
+            }
+        }
+
+        /* ================= ERROR UI ================= */
+        function showMSTError(msg) {
+            mstError.textContent = msg;
+            mstError.style.display = "block";
+            mst.classList.add("error");
+        }
+
+        function clearMSTError() {
+            mstError.textContent = "";
+            mstError.style.display = "none";
+            mst.classList.remove("error");
+        }
+
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        const emailError = document.getElementById("emailError");
+
+        function showEmailError(msg) {
+            emailError.textContent = msg;
+            emailError.style.display = "block";
+            email.classList.add("error");
+        }
+
+        function clearEmailError() {
+            emailError.textContent = "";
+            emailError.style.display = "none";
+            email.classList.remove("error");
+        }
+
+        /* ================= AUTO SAVE WHEN USER EDIT ================= */
+        ["company", "owner", "phone", "email", "address", "note"]
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                el.addEventListener("blur", () => {
+                    if (!mst.value) return;      // chưa có MST thì không lưu
+                    saveHistory();               // 🔥 lưu lại dữ liệu mới nhập tay
+                    renderHistory();
+                });
+            });
+
+
+        /* ================= SAVE HISTORY ================= */
+        function saveHistory() {
+            const typeEl = document.querySelector('input[name="type"]:checked');
+            if (!mst.value || !typeEl) return;
+
+            const record = {
+                mst: mst.value.trim(),
+                type: typeEl.value,
+
+                company: company.value,
+                owner: owner.value,      // 👈 người đại diện / chủ hộ
+                phone: phone.value,
+                email: email.value,
+                address: address.value,
+                note: note.value,
+
+                // checkbox
+                chkInvoice: chkInvoice.checked,
+                chkPos: chkPos.checked,
+                chkBook: chkBook.checked,
+                chkTax: chkTax.checked,
+                chkPay: chkPay.checked,
+
+                // thanh toán
+                payAmount: payAmount.value,
+                payContent: payContent.value,
+
+                // QR
+                qrImageBase64: window.qrImageBase64 || null,
+
+                time: Date.now()
+            };
+
+            let list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+
+            // ❌ xoá MST trùng
+            list = list.filter(i => i.mst !== record.mst);
+
+            // ➕ thêm lên đầu
+            list.unshift(record);
+
+            // ✂️ tối đa 10
+            list = list.slice(0, MAX_HISTORY);
+
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+        }
+
+        /* ================= LOAD HISTORY ================= */
+        function loadHistory(mstValue) {
+            const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+            const item = list.find(i => i.mst === mstValue);
+            if (!item) return;
+
+            // type
+            document.querySelector(`input[name="type"][value="${item.type}"]`).checked = true;
+
+            mst.value = item.mst;
+            company.value = item.company;
+            owner.value = item.owner;
+            phone.value = item.phone;
+            email.value = item.email;
+            address.value = item.address;
+            note.value = item.note;
+
+            // checkbox
+            chkInvoice.checked = item.chkInvoice;
+            chkPos.checked = item.chkPos;
+            chkBook.checked = item.chkBook;
+            chkTax.checked = item.chkTax;
+            chkPay.checked = item.chkPay;
+
+            // thanh toán
+            payAmount.value = item.payAmount || "";
+            payContent.value = item.payContent || "";
+
+            // QR
+            if (item.qrImageBase64) {
+                window.qrImageBase64 = item.qrImageBase64;
+                qrPreview.src = item.qrImageBase64;
+                qrPreview.style.display = "block";
+            } else {
+                window.qrImageBase64 = null;
+                qrPreview.style.display = "none";
+            }
+
+            lastMST = item.mst;
+
+            clearMSTError();
+            clearEmailError();
+            toggleTaxCheckbox();
+            render();
+        }
+
+
+        /* ================= GET HISTORY ================= */
+        function getHistory() {
+            return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        }
+
+        function renderHistory() {
+            const box = document.getElementById("historyBox");
+            const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+
+            if (!list.length) {
+                box.innerHTML = "<i>Chưa có dữ liệu</i>";
+                return;
+            }
+
+            box.innerHTML = list.map(i => `
+        <div style="cursor:pointer;padding:4px 0;color:#0a58ca"
+             onclick="loadHistory('${i.mst}')">
+            ${i.mst} – ${i.company || "(chưa tên)"}
+        </div>
+    `).join("");
+        }
+
+        /* ================= CLEAR ALL HISTORY ================= */
+        function clearAllHistory() {
+            if (!confirm("Bạn chắc chắn muốn xóa toàn bộ lịch sử?")) return;
+
+            localStorage.removeItem(HISTORY_KEY);
+
+            lastMST = "";
+            renderHistory();
+        }
+
+
+
+        /* ================= INIT ================= */
+        toggleTaxCheckbox();
+        render();
+        renderHistory();
+
+    </script>
+
+    <script>
+        const HISTORY_KEY = "mst_history_v2";
+        const MAX_HISTORY = 10;
+
+
+
+
+    </script>
+</body>
+
+</html>

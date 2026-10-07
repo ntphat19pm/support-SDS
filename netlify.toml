@@ -1,0 +1,10 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/lookup-mst"
+  to = "/.netlify/functions/lookup-mst"
+  status = 200
