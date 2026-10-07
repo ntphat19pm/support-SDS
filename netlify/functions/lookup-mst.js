@@ -52,21 +52,41 @@ export default async (req) => {
   // ============================================================
 
   try {
-    const response = await fetch(
-      `https://invoy.io.vn/api/v1/public/lookup-mst?mst=${encodeURIComponent(tax)}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
+    const invoyUrl = `https://invoy.io.vn/api/v1/public/lookup-mst?mst=${encodeURIComponent(tax)}`;
+
+    console.log("========== INVOY ==========");
+    console.log("URL:", invoyUrl);
+
+    const response = await fetch(invoyUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0",
       },
-    );
+    });
+
+    console.log("Invoy status:", response.status);
+    console.log("Invoy statusText:", response.statusText);
+
+    const rawText = await response.text();
+
+    console.log("Invoy raw response:", rawText);
 
     if (response.ok) {
-      const data = await response.json();
+      let data;
 
-      console.log("INVOY:", data);
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        console.error("Invoy JSON parse lỗi:", parseError);
+        data = null;
+      }
+
+      console.log("Invoy parsed data:", data);
 
       if (data && data.taxCode) {
+        console.log("✅ INVOY THÀNH CÔNG");
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -88,15 +108,17 @@ export default async (req) => {
           {
             status: 200,
             headers: {
-              ...headers,
               "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
             },
           },
         );
       }
+    } else {
+      console.error("❌ INVOY HTTP ERROR:", response.status);
     }
   } catch (error) {
-    console.error("Invoy API lỗi:", error);
+    console.error("❌ INVOY FETCH ERROR:", error);
   }
 
   // ============================================================
